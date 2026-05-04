@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Checkmark/attendance icon in white -->
+    <group
+        android:translateX="27"
+        android:translateY="27">
+        <!-- Clipboard body -->
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M27,0L27,0C29.76,0 32,2.24 32,5L32,5L22,5L22,5C22,2.24 24.24,0 27,0Z" />
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M41,5H32v3c0,1.1 -0.9,2 -2,2H24c-1.1,0 -2,-0.9 -2,-2V5H13c-2.21,0 -4,1.79 -4,4v38c0,2.21 1.79,4 4,4h28c2.21,0 4,-1.79 4,-4V9C45,6.79 43.21,5 41,5z" />
+
+        <!-- Checkmark -->
+        <path
+            android:fillColor="#1A237E"
+            android:pathData="M22,35l-7,-7l2.83,-2.83L22,29.34l12.17,-12.17L37,20L22,35z"
+            android:strokeWidth="0" />
+    </group>
+</vector>
