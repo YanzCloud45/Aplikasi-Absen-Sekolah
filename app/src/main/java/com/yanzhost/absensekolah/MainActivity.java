@@ -1,12 +1,15 @@
 package com.yanzhost.absensekolah;
 
+import android.Manifest;
 import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.view.KeyEvent;
 import android.view.View;
@@ -24,25 +27,17 @@ import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.Toast;
 
+import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
-/**
- * MainActivity - WebView utama yang menampilkan website absen sekolah.
- * 
- * Fitur:
- * - WebView full screen dengan JavaScript enabled
- * - Cookie/session management agar login tetap tersimpan
- * - Swipe to refresh
- * - Progress bar loading
- * - Halaman error offline
- * - File upload support (untuk upload foto dll)
- * - Back button navigation dalam WebView
- */
 public class MainActivity extends AppCompatActivity {
 
     private static final String WEB_URL = "https://yanzhost.wuaze.com";
     private static final int FILE_CHOOSER_REQUEST = 1001;
+    private static final int CAMERA_PERMISSION_REQUEST = 2001;
 
     private WebView webView;
     private ProgressBar progressBar;
@@ -55,7 +50,7 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        // Sembunyikan action bar untuk full screen
+        // Sembunyikan action bar
         if (getSupportActionBar() != null) {
             getSupportActionBar().hide();
         }
@@ -67,6 +62,9 @@ public class MainActivity extends AppCompatActivity {
         errorLayout = findViewById(R.id.error_layout);
         Button retryButton = findViewById(R.id.btn_retry);
 
+        // Request Camera Permission (untuk scan QRIS)
+        requestCameraPermission();
+
         // Setup WebView
         setupWebView();
 
@@ -76,11 +74,8 @@ public class MainActivity extends AppCompatActivity {
                 getResources().getColor(R.color.primary_dark),
                 getResources().getColor(R.color.accent)
         );
-        swipeRefresh.setOnRefreshListener(() -> {
-            webView.reload();
-        });
+        swipeRefresh.setOnRefreshListener(() -> webView.reload());
 
-        // Tombol retry saat offline
         retryButton.setOnClickListener(v -> {
             if (isNetworkAvailable()) {
                 errorLayout.setVisibility(View.GONE);
@@ -99,47 +94,65 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    /**
+     * Request izin kamera untuk scan QRIS
+     */
+    private void requestCameraPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
+                    != PackageManager.PERMISSION_GRANTED) {
+                ActivityCompat.requestPermissions(this,
+                        new String[]{Manifest.permission.CAMERA},
+                        CAMERA_PERMISSION_REQUEST);
+            }
+        }
+    }
+
+    /**
+     * Handle hasil request permission
+     */
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions,
+                                           @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == CAMERA_PERMISSION_REQUEST) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                Toast.makeText(this, "Izin kamera diberikan", Toast.LENGTH_SHORT).show();
+            } else {
+                Toast.makeText(this, "Izin kamera diperlukan untuk scan QRIS", Toast.LENGTH_LONG).show();
+            }
+        }
+    }
+
     @SuppressLint("SetJavaScriptEnabled")
     private void setupWebView() {
         WebSettings webSettings = webView.getSettings();
 
-        // Aktifkan JavaScript
+        // Aktifkan JavaScript (wajib untuk scan QRIS)
         webSettings.setJavaScriptEnabled(true);
-
-        // Aktifkan DOM Storage untuk session
         webSettings.setDomStorageEnabled(true);
-
-        // Aktifkan database untuk local storage
         webSettings.setDatabaseEnabled(true);
-
-        // Cache settings - agar lebih cepat loading
         webSettings.setCacheMode(WebSettings.LOAD_DEFAULT);
-        webSettings.setAppCacheEnabled(true);
-        webSettings.setAppCachePath(getApplicationContext().getCacheDir().getAbsolutePath());
-
+        
         // Zoom settings
         webSettings.setSupportZoom(true);
         webSettings.setBuiltInZoomControls(true);
         webSettings.setDisplayZoomControls(false);
-
-        // Lainnya
         webSettings.setLoadWithOverviewMode(true);
         webSettings.setUseWideViewPort(true);
         webSettings.setAllowFileAccess(true);
         webSettings.setAllowContentAccess(true);
         webSettings.setJavaScriptCanOpenWindowsAutomatically(true);
 
-        // Media autoplay
+        // Media dan mixed content
         webSettings.setMediaPlaybackRequiresUserGesture(false);
-
-        // Mixed content (HTTP + HTTPS)
         webSettings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
 
-        // User Agent - tambahkan identifikasi APK
+        // User Agent
         String userAgent = webSettings.getUserAgentString();
         webSettings.setUserAgentString(userAgent + " AbsenSekolahApp/1.0");
 
-        // ===== COOKIE MANAGEMENT (Session Tetap Tersimpan) =====
+        // ===== COOKIE MANAGEMENT =====
         setupCookieManager();
 
         // ===== WebViewClient =====
@@ -155,23 +168,18 @@ public class MainActivity extends AppCompatActivity {
                 super.onPageFinished(view, url);
                 progressBar.setVisibility(View.GONE);
                 swipeRefresh.setRefreshing(false);
-
-                // Sync cookies setelah halaman selesai loading
                 CookieManager.getInstance().flush();
             }
 
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 String url = request.getUrl().toString();
-
-                // Buka URL eksternal di browser
                 if (!url.contains("yanzhost.wuaze.com")) {
                     Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
                     startActivity(intent);
                     return true;
                 }
-
-                return false; // Biarkan WebView yang handle
+                return false;
             }
 
             @Override
@@ -183,7 +191,7 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        // ===== WebChromeClient (Progress & File Upload) =====
+        // ===== WebChromeClient (untuk file upload/camera) =====
         webView.setWebChromeClient(new WebChromeClient() {
             @Override
             public void onProgressChanged(WebView view, int newProgress) {
@@ -193,7 +201,7 @@ public class MainActivity extends AppCompatActivity {
                 }
             }
 
-            // File upload support
+            // Untuk file upload (camera/gallery)
             @Override
             public boolean onShowFileChooser(WebView webView, ValueCallback<Uri[]> filePathCallback,
                                              FileChooserParams fileChooserParams) {
@@ -213,44 +221,23 @@ public class MainActivity extends AppCompatActivity {
                 return true;
             }
         });
-
-        // Scroll listener untuk swipe refresh (agar tidak konflik)
-        webView.setOnScrollChangeListener((v, scrollX, scrollY, oldScrollX, oldScrollY) -> {
-            swipeRefresh.setEnabled(scrollY == 0);
-        });
     }
 
-    /**
-     * Setup Cookie Manager agar login session tetap tersimpan
-     * bahkan setelah aplikasi ditutup dan dibuka kembali
-     */
     @SuppressWarnings("deprecation")
     private void setupCookieManager() {
-        // Untuk Android < 5.0 (backward compatibility)
         CookieSyncManager.createInstance(this);
-
         CookieManager cookieManager = CookieManager.getInstance();
         cookieManager.setAcceptCookie(true);
-
-        // Untuk Android 5.0+ (Lollipop)
         cookieManager.setAcceptThirdPartyCookies(webView, true);
-
-        // Flush cookies
         cookieManager.flush();
     }
 
-    /**
-     * Tampilkan halaman error saat offline
-     */
     private void showErrorPage() {
         webView.setVisibility(View.GONE);
         errorLayout.setVisibility(View.VISIBLE);
         swipeRefresh.setRefreshing(false);
     }
 
-    /**
-     * Cek apakah ada koneksi internet
-     */
     private boolean isNetworkAvailable() {
         ConnectivityManager connectivityManager = (ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
         if (connectivityManager != null) {
@@ -260,9 +247,6 @@ public class MainActivity extends AppCompatActivity {
         return false;
     }
 
-    /**
-     * Handle tombol back - navigasi mundur di WebView
-     */
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
         if (keyCode == KeyEvent.KEYCODE_BACK && webView.canGoBack()) {
@@ -272,9 +256,6 @@ public class MainActivity extends AppCompatActivity {
         return super.onKeyDown(keyCode, event);
     }
 
-    /**
-     * Handle hasil dari file chooser
-     */
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
@@ -296,21 +277,19 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onPause() {
         super.onPause();
-        // Sync cookies saat aplikasi di-pause
         CookieManager.getInstance().flush();
     }
 
     @Override
     protected void onResume() {
         super.onResume();
-        // Sync cookies saat aplikasi di-resume
         CookieManager.getInstance().flush();
     }
 
     @Override
     protected void onDestroy() {
         if (webView != null) {
-            webView.clearCache(false); // Hanya hapus cache, bukan cookies
+            webView.clearCache(false);
             webView.destroy();
         }
         super.onDestroy();
