@@ -43,6 +43,7 @@ public class MainActivity extends AppCompatActivity {
     private ProgressBar progressBar;
     private SwipeRefreshLayout swipeRefresh;
     private LinearLayout errorLayout;
+    private Button retryButton;
     private ValueCallback<Uri[]> fileUploadCallback;
 
     @Override
@@ -60,9 +61,9 @@ public class MainActivity extends AppCompatActivity {
         progressBar = findViewById(R.id.progress_bar);
         swipeRefresh = findViewById(R.id.swipe_refresh);
         errorLayout = findViewById(R.id.error_layout);
-        Button retryButton = findViewById(R.id.btn_retry);
+        retryButton = findViewById(R.id.btn_retry);
 
-        // Request Camera Permission (untuk scan QRIS)
+        // Request izin kamera (untuk scan QRIS)
         requestCameraPermission();
 
         // Setup WebView
@@ -71,11 +72,11 @@ public class MainActivity extends AppCompatActivity {
         // Setup Swipe to Refresh
         swipeRefresh.setColorSchemeColors(
                 getResources().getColor(R.color.primary),
-                getResources().getColor(R.color.primary_dark),
                 getResources().getColor(R.color.accent)
         );
         swipeRefresh.setOnRefreshListener(() -> webView.reload());
 
+        // Tombol retry saat offline
         retryButton.setOnClickListener(v -> {
             if (isNetworkAvailable()) {
                 errorLayout.setVisibility(View.GONE);
@@ -128,12 +129,12 @@ public class MainActivity extends AppCompatActivity {
     private void setupWebView() {
         WebSettings webSettings = webView.getSettings();
 
-        // Aktifkan JavaScript (wajib untuk scan QRIS)
+        // Aktifkan JavaScript
         webSettings.setJavaScriptEnabled(true);
         webSettings.setDomStorageEnabled(true);
         webSettings.setDatabaseEnabled(true);
         webSettings.setCacheMode(WebSettings.LOAD_DEFAULT);
-        
+
         // Zoom settings
         webSettings.setSupportZoom(true);
         webSettings.setBuiltInZoomControls(true);
@@ -144,18 +145,17 @@ public class MainActivity extends AppCompatActivity {
         webSettings.setAllowContentAccess(true);
         webSettings.setJavaScriptCanOpenWindowsAutomatically(true);
 
-        // Media dan mixed content
-        webSettings.setMediaPlaybackRequiresUserGesture(false);
+        // Mixed content (HTTP + HTTPS)
         webSettings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
 
-        // User Agent
+        // User Agent - tambahkan identifikasi APK
         String userAgent = webSettings.getUserAgentString();
         webSettings.setUserAgentString(userAgent + " AbsenSekolahApp/1.0");
 
-        // ===== COOKIE MANAGEMENT =====
+        // Setup Cookie Manager (session tetap tersimpan)
         setupCookieManager();
 
-        // ===== WebViewClient =====
+        // WebView Client
         webView.setWebViewClient(new WebViewClient() {
             @Override
             public void onPageStarted(WebView view, String url, Bitmap favicon) {
@@ -174,6 +174,7 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 String url = request.getUrl().toString();
+                // Buka URL eksternal di browser
                 if (!url.contains("yanzhost.wuaze.com")) {
                     Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
                     startActivity(intent);
@@ -191,7 +192,7 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        // ===== WebChromeClient (untuk file upload/camera) =====
+        // WebChrome Client (untuk file upload / kamera)
         webView.setWebChromeClient(new WebChromeClient() {
             @Override
             public void onProgressChanged(WebView view, int newProgress) {
@@ -201,7 +202,7 @@ public class MainActivity extends AppCompatActivity {
                 }
             }
 
-            // Untuk file upload (camera/gallery)
+            // Untuk file upload (camera/gallery) - penting untuk scan QRIS
             @Override
             public boolean onShowFileChooser(WebView webView, ValueCallback<Uri[]> filePathCallback,
                                              FileChooserParams fileChooserParams) {
@@ -223,21 +224,32 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
+    /**
+     * Setup Cookie Manager agar login session tetap tersimpan
+     */
     @SuppressWarnings("deprecation")
     private void setupCookieManager() {
+        // Untuk Android < 5.0 (backward compatibility)
         CookieSyncManager.createInstance(this);
         CookieManager cookieManager = CookieManager.getInstance();
         cookieManager.setAcceptCookie(true);
+        // Untuk Android 5.0+ (Lollipop)
         cookieManager.setAcceptThirdPartyCookies(webView, true);
         cookieManager.flush();
     }
 
+    /**
+     * Tampilkan halaman error saat offline
+     */
     private void showErrorPage() {
         webView.setVisibility(View.GONE);
         errorLayout.setVisibility(View.VISIBLE);
         swipeRefresh.setRefreshing(false);
     }
 
+    /**
+     * Cek koneksi internet
+     */
     private boolean isNetworkAvailable() {
         ConnectivityManager connectivityManager = (ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
         if (connectivityManager != null) {
@@ -247,6 +259,9 @@ public class MainActivity extends AppCompatActivity {
         return false;
     }
 
+    /**
+     * Handle tombol back - navigasi mundur di WebView
+     */
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
         if (keyCode == KeyEvent.KEYCODE_BACK && webView.canGoBack()) {
@@ -256,6 +271,9 @@ public class MainActivity extends AppCompatActivity {
         return super.onKeyDown(keyCode, event);
     }
 
+    /**
+     * Handle hasil dari file chooser (kamera / galeri)
+     */
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
